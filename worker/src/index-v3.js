@@ -1,17 +1,35 @@
+import { createRemoteJWKSet, decodeJwt, jwtVerify } from "jose";
 import baseHandler from "./index-v2.js";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" };
 const BRAVE_SEARCH_ENDPOINT = "https://api.search.brave.com/res/v1/web/search";
+const GLOBAL_VERCEL_ISSUER = "https://oidc.vercel.com";
+const jwksByIssuer = new Map();
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
-    if (url.pathname === "/api/search" && request.method === "GET") {
-      if (!env.APP_TOKEN || request.headers.get("Authorization") !== `Bearer ${env.APP_TOKEN}`) {
-        return json({ error: "API key không đúng." }, 401);
-      }
+    // /api/config intentionally stays public so the PWA can read the VAPID public key.
+    if (url.pathname === "/api/config" && request.method === "GET") {
+      return baseHandler.fetch(request, env, ctx);
+    }
 
+    const auth = await authorizeRequest(request, env);
+    if (!auth) {
+      return json({ error: "Không xác thực được yêu cầu từ ứng dụng." }, 401);
+    }
+
+    if (url.pathname === "/api/health" && request.method === "GET") {
+      return json({
+        ok: true,
+        service: "shopee-price-watcher",
+        auth: auth.mode,
+        time: new Date().toISOString()
+      });
+    }
+
+    if (url.pathname === "/api/search" && request.method === "GET") {
       try {
         return await searchShopeeWithBrave(env, url);
       } catch (error) {
@@ -23,6 +41,14 @@ export default {
       }
     }
 
+    // index-v2 still understands the legacy APP_TOKEN check. For a verified OIDC
+    // request, give it a request-scoped token so no shared long-lived secret is needed.
+    if (auth.mode === "oidc") {
+      const delegatedEnv = Object.create(env);
+      delegatedEnv.APP_TOKEN = auth.token;
+      return baseHandler.fetch(request, delegatedEnv, ctx);
+    }
+
     return baseHandler.fetch(request, env, ctx);
   },
 
@@ -30,6 +56,59 @@ export default {
     return baseHandler.scheduled(controller, env, ctx);
   }
 };
+
+async function authorizeRequest(request, env) {
+  const authorization = String(request.headers.get("Authorization") || "");
+  if (!authorization.startsWith("Bearer ")) return null;
+
+  const token = authorization.slice(7).trim();
+  if (!token) return null;
+
+  // Keep the old secret as a temporary fallback so current production does not break
+  // while Vercel OIDC is being rolled out.
+  if (env.APP_TOKEN && token === String(env.APP_TOKEN)) {
+    return { mode: "legacy", token };
+  }
+
+  if (await verifyVercelOidc(token, env)) {
+    return { mode: "oidc", token };
+  }
+
+  return null;
+}
+
+async function verifyVercelOidc(token, env) {
+  try {
+    const unverified = decodeJwt(token);
+    const issuer = String(unverified.iss || "").replace(/\/$/, "");
+    const teamIssuer = String(env.VERCEL_OIDC_ISSUER || "").replace(/\/$/, "");
+    const allowedIssuers = new Set([teamIssuer, GLOBAL_VERCEL_ISSUER].filter(Boolean));
+    if (!allowedIssuers.has(issuer)) return false;
+
+    const audience = String(env.VERCEL_OIDC_AUDIENCE || "").trim();
+    const subject = String(env.VERCEL_OIDC_SUBJECT || "").trim();
+    if (!audience || !subject) return false;
+
+    let jwks = jwksByIssuer.get(issuer);
+    if (!jwks) {
+      jwks = createRemoteJWKSet(new URL(`${issuer}/.well-known/jwks`));
+      jwksByIssuer.set(issuer, jwks);
+    }
+
+    await jwtVerify(token, jwks, {
+      issuer,
+      audience,
+      subject
+    });
+    return true;
+  } catch (error) {
+    console.warn(JSON.stringify({
+      event: "vercel_oidc_rejected",
+      error: readableError(error)
+    }));
+    return false;
+  }
+}
 
 async function searchShopeeWithBrave(env, url) {
   const query = String(url.searchParams.get("q") || "").trim();
