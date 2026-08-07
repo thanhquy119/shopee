@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="description" content="PWA theo dõi giá sản phẩm Shopee theo giờ." />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Shopee Watch" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
+  <link rel="stylesheet" href="/styles.css" />
+  <title>S. — Shopee Price Watch</title>
+</head>
+<body>
+  <div class="site-shell">
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="Trang chủ">S.</a>
+      <div class="top-actions">
+        <button id="installButton" class="text-button" hidden>Cài PWA</button>
+        <button id="settingsButton" class="pill-button" type="button">Cài đặt</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <p class="eyebrow">SHOPEE PRICE WATCH</p>
+        <h1>Theo dõi giá.<br />Không cần canh.</h1>
+        <p class="hero-copy">Dán link sản phẩm. Hệ thống kiểm tra mỗi giờ và báo khi giá thấp hơn lúc em bắt đầu theo dõi.</p>
+        <form id="addProductForm" class="track-box">
+          <span class="track-glyph" aria-hidden="true">↘</span>
+          <label class="sr-only" for="productUrl">Link sản phẩm Shopee</label>
+          <input id="productUrl" name="url" type="url" inputmode="url" autocomplete="off" placeholder="https://shopee.vn/..." required />
+          <button id="addButton" type="submit">Theo dõi</button>
+        </form>
+        <p id="formMessage" class="form-message" role="status"></p>
+      </section>
+
+      <section class="dashboard-shell">
+        <div class="section-head">
+          <div><p class="section-label">DANH SÁCH THEO DÕI</p><h2>Sản phẩm</h2></div>
+          <button id="refreshButton" class="outline-button" type="button">Làm mới</button>
+        </div>
+        <div class="stats-grid" aria-label="Tổng quan">
+          <article class="stat-card"><span>Đang theo dõi</span><strong id="totalProducts">—</strong></article>
+          <article class="stat-card"><span>Đang giảm</span><strong id="discountedProducts">—</strong></article>
+          <article class="stat-card"><span>Cập nhật gần nhất</span><strong id="lastUpdated">—</strong></article>
+        </div>
+        <div id="setupNotice" class="notice" hidden><strong>Chưa kết nối Worker.</strong><p>Mở “Cài đặt”, nhập URL Cloudflare Worker và API key để bắt đầu.</p></div>
+        <div id="loadingState" class="loading-state" hidden><span class="loading-dot"></span><div><strong>Đang đồng bộ</strong><p>Đọc danh sách và giá mới nhất…</p></div></div>
+        <div id="emptyState" class="empty-state" hidden><span class="empty-mark">S.</span><h3>Chưa có sản phẩm.</h3><p>Dán một link Shopee ở phía trên để bắt đầu.</p></div>
+        <div id="productList" class="product-list"></div>
+      </section>
+    </main>
+
+    <footer><span>S. / SHOPEE PRICE WATCH</span><span>CHECK / 01 HOUR</span></footer>
+  </div>
+
+  <dialog id="settingsDialog" class="settings-dialog">
+    <form method="dialog" class="settings-card" id="settingsForm">
+      <div class="settings-head">
+        <div><p class="section-label">CÀI ĐẶT</p><h2>Kết nối hệ thống</h2></div>
+        <button class="icon-button" value="cancel" aria-label="Đóng" type="submit">×</button>
+      </div>
+      <label><span>Cloudflare Worker URL</span><input id="apiUrlInput" type="url" placeholder="https://shopee-price-watcher.xxx.workers.dev" /></label>
+      <label><span>API key</span><input id="apiTokenInput" type="password" autocomplete="off" placeholder="Nhập APP_TOKEN của Worker" /></label>
+      <p class="settings-note">API key chỉ được lưu trong trình duyệt trên thiết bị này, không ghi vào GitHub hay gửi sang Vercel.</p>
+      <div class="settings-actions">
+        <button id="saveSettingsButton" class="pill-button" type="button">Lưu kết nối</button>
+        <button id="notificationButton" class="outline-button" type="button">Bật thông báo</button>
+        <button id="testNotificationButton" class="outline-button" type="button">Gửi thử</button>
+      </div>
+      <p id="settingsMessage" class="form-message"></p>
+    </form>
+  </dialog>
+
+  <template id="productTemplate">
+    <article class="product-card">
+      <div class="product-media"><img class="product-image" alt="" loading="lazy" /><div class="product-image-fallback">S.</div></div>
+      <div class="product-main">
+        <div class="product-topline"><span class="status-chip">ĐANG THEO DÕI</span><span class="check-time">—</span></div>
+        <h3 class="product-name">Sản phẩm Shopee</h3>
+        <div class="price-row"><strong class="current-price">—</strong><span class="drop-badge" hidden></span></div>
+        <dl class="price-facts">
+          <div><dt>Ban đầu</dt><dd class="baseline-price">—</dd></div>
+          <div><dt>Thấp nhất</dt><dd class="lowest-price">—</dd></div>
+          <div><dt>Trạng thái</dt><dd class="price-status">—</dd></div>
+        </dl>
+        <p class="product-error" hidden></p>
+        <div class="product-actions">
+          <button class="check-button outline-button" type="button">Kiểm tra ngay</button>
+          <a class="shop-link outline-button" target="_blank" rel="noreferrer">Mở Shopee</a>
+          <button class="delete-button text-button danger" type="button">Xoá</button>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <script src="/config.js"></script>
+  <script src="/app.js" defer></script>
+</body>
+</html>
