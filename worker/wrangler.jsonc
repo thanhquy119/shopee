@@ -1,0 +1,21 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "shopee-price-watcher",
+  "main": "src/index.js",
+  "compatibility_date": "2026-08-07",
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "shopee-price-watcher",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "triggers": {
+    "crons": ["0 * * * *"]
+  },
+  "vars": {
+    "ALLOWED_ORIGIN": "https://REPLACE_WITH_VERCEL_DOMAIN"
+  }
+}
