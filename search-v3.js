@@ -127,7 +127,7 @@
         try {
           await gateway("/api/products", {
             method: "POST",
-            body: JSON.stringify({ url: product.url })
+            body: JSON.stringify({ url: product.sourceUrl || product.url })
           });
           formMessage.textContent = "Đã thêm sản phẩm và lưu giá hiện tại làm mốc.";
           formMessage.classList.remove("error");
