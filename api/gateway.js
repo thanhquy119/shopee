@@ -6,6 +6,9 @@ export default async function handler(req, res) {
     ? String(oidcHeader[0] || "").trim()
     : String(oidcHeader || "").trim();
   const authToken = oidcToken || appToken;
+  const authMode = oidcToken ? "oidc" : "legacy";
+
+  res.setHeader("X-Gateway-Auth-Mode", authMode);
 
   if (!workerUrl) {
     return res.status(503).json({
