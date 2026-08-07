@@ -17,7 +17,7 @@
     }
   ],
   "triggers": {
-    "crons": ["0 * * * *"]
+    "crons": ["5 17 * * *"]
   },
   "vars": {
     "ALLOWED_ORIGIN": "https://shopee-theta-amber.vercel.app",
