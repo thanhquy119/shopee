@@ -1,14 +1,14 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "shopee-price-watcher",
-  "main": "src/index.js",
+  "main": "src/index-v2.js",
   "compatibility_date": "2026-08-07",
   "observability": { "enabled": true },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "shopee-price-watcher",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "database_id": "e7038772-cd38-4683-9c59-83fc510855dc",
       "migrations_dir": "migrations"
     }
   ],

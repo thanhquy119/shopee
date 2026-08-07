@@ -4,7 +4,8 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "wrangler d1 migrations apply shopee-price-watcher --remote && wrangler deploy",
+    "deploy:worker": "wrangler deploy",
     "db:remote": "wrangler d1 migrations apply shopee-price-watcher --remote",
     "db:local": "wrangler d1 migrations apply shopee-price-watcher --local"
   },
