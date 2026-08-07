@@ -16,6 +16,6 @@
     "crons": ["0 * * * *"]
   },
   "vars": {
-    "ALLOWED_ORIGIN": "https://REPLACE_WITH_VERCEL_DOMAIN"
+    "ALLOWED_ORIGIN": "https://shopee-theta-amber.vercel.app"
   }
 }
