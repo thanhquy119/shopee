@@ -3,7 +3,6 @@ import baseHandler from "./index-v2.js";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" };
 const BRAVE_SEARCH_ENDPOINT = "https://api.search.brave.com/res/v1/web/search";
-const JINA_READER_PREFIX = "https://r.jina.ai/";
 const GLOBAL_VERCEL_ISSUER = "https://oidc.vercel.com";
 const jwksByIssuer = new Map();
 
@@ -16,9 +15,7 @@ export default {
     }
 
     const auth = await authorizeRequest(request, env);
-    if (!auth) {
-      return json({ error: "Không xác thực được yêu cầu từ ứng dụng." }, 401);
-    }
+    if (!auth) return json({ error: "Không xác thực được yêu cầu từ ứng dụng." }, 401);
 
     if (url.pathname === "/api/health" && request.method === "GET") {
       return json({
@@ -102,36 +99,39 @@ async function searchShopee(env, url) {
   if (apiKey) {
     try {
       const products = await searchShopeeWithBrave(apiKey, keyword);
-      if (products.length) {
-        return json({ query: keyword, products, count: products.length, source: "brave", fallbackUrl });
-      }
+      if (products.length) return searchResponse(keyword, products, "brave", fallbackUrl, warnings);
       warnings.push("Brave Search không tìm thấy URL sản phẩm có thể nhận diện.");
     } catch (error) {
-      warnings.push(`Brave: ${truncate(readableError(error), 180)}`);
+      warnings.push(`Brave: ${truncate(readableError(error), 160)}`);
       console.warn(JSON.stringify({ event: "brave_search_failed", error: readableError(error) }));
     }
   }
 
   try {
-    const products = await searchShopeeWithJina(keyword);
-    if (products.length) {
-      return json({ query: keyword, products, count: products.length, source: "jina-reader", fallbackUrl, warnings });
-    }
-    warnings.push("Jina Reader chưa tìm thấy URL sản phẩm Shopee phù hợp.");
+    const products = await searchShopeeWithDuckDuckGo(keyword);
+    if (products.length) return searchResponse(keyword, products, "duckduckgo", fallbackUrl, warnings);
+    warnings.push("DuckDuckGo chưa tìm thấy URL sản phẩm Shopee phù hợp.");
   } catch (error) {
-    warnings.push(`Jina: ${truncate(readableError(error), 180)}`);
-    console.warn(JSON.stringify({ event: "jina_search_failed", error: readableError(error) }));
+    warnings.push(`DuckDuckGo: ${truncate(readableError(error), 160)}`);
+    console.warn(JSON.stringify({ event: "duckduckgo_search_failed", error: readableError(error) }));
+  }
+
+  try {
+    const products = await searchShopeeWithBingRss(keyword);
+    if (products.length) return searchResponse(keyword, products, "bing-rss", fallbackUrl, warnings);
+    warnings.push("Bing RSS chưa tìm thấy URL sản phẩm Shopee phù hợp.");
+  } catch (error) {
+    warnings.push(`Bing RSS: ${truncate(readableError(error), 160)}`);
+    console.warn(JSON.stringify({ event: "bing_rss_search_failed", error: readableError(error) }));
   }
 
   if (env.BROWSER?.quickAction) {
     try {
       const products = await searchShopeeWithBrowser(env, keyword);
-      if (products.length) {
-        return json({ query: keyword, products, count: products.length, source: "browser-web", fallbackUrl, warnings });
-      }
+      if (products.length) return searchResponse(keyword, products, "browser-web", fallbackUrl, warnings);
       warnings.push("Browser Run chưa tìm được URL sản phẩm Shopee từ kết quả web.");
     } catch (error) {
-      warnings.push(`Browser: ${truncate(readableError(error), 180)}`);
+      warnings.push(`Browser: ${truncate(readableError(error), 160)}`);
       console.warn(JSON.stringify({ event: "browser_search_failed", error: readableError(error) }));
     }
   }
@@ -147,6 +147,10 @@ async function searchShopee(env, url) {
   });
 }
 
+function searchResponse(query, products, source, fallbackUrl, warnings) {
+  return json({ query, products, count: products.length, source, fallbackUrl, warnings });
+}
+
 async function searchShopeeWithBrave(apiKey, keyword) {
   const endpoint = new URL(BRAVE_SEARCH_ENDPOINT);
   endpoint.searchParams.set("q", `site:shopee.vn ${keyword}`);
@@ -160,98 +164,74 @@ async function searchShopeeWithBrave(apiKey, keyword) {
   endpoint.searchParams.set("result_filter", "web");
 
   const response = await fetch(endpoint, {
-    method: "GET",
-    headers: { "Accept": "application/json", "X-Subscription-Token": apiKey },
+    headers: { Accept: "application/json", "X-Subscription-Token": apiKey },
     redirect: "follow"
   });
-  if (!response.ok) throw new Error(`Brave Search HTTP ${response.status}`);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
   const payload = await response.json().catch(() => null);
-  if (!payload) throw new Error("Brave Search không trả về dữ liệu hợp lệ.");
-
   const rows = Array.isArray(payload?.web?.results) ? payload.web.results : [];
-  const seen = new Set();
   const products = [];
+  const seen = new Set();
+
   for (const row of rows) {
-    const product = parseBraveShopeeResult(row);
-    if (!product) continue;
-    addUniqueProduct(products, seen, product);
+    const resultUrl = normalizeShopeeResultUrl(row?.url);
+    const product = productFromUrl(resultUrl, cleanText(row?.title), cleanText(row?.description), firstUrl(row?.thumbnail?.src, row?.thumbnail?.original));
+    if (product) addUniqueProduct(products, seen, product);
     if (products.length >= 18) break;
   }
   return products;
 }
 
-async function searchShopeeWithJina(keyword) {
-  const target = new URL("https://www.bing.com/search");
-  target.searchParams.set("q", `site:shopee.vn ${keyword}`);
-  target.searchParams.set("setlang", "vi-VN");
-  target.searchParams.set("cc", "vn");
+async function searchShopeeWithDuckDuckGo(keyword) {
+  const endpoint = new URL("https://html.duckduckgo.com/html/");
+  endpoint.searchParams.set("q", `site:shopee.vn ${keyword}`);
+  endpoint.searchParams.set("kl", "vn-vi");
 
-  const response = await fetch(`${JINA_READER_PREFIX}${target.href}`, {
-    method: "GET",
+  const response = await fetch(endpoint, {
     headers: {
-      "Accept": "text/markdown, text/plain;q=0.9, */*;q=0.8",
-      "X-Return-Format": "markdown"
+      Accept: "text/html,application/xhtml+xml",
+      "Accept-Language": "vi-VN,vi;q=0.9,en;q=0.5",
+      "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/136 Safari/537.36"
     },
     redirect: "follow"
   });
-  if (!response.ok) throw new Error(`Jina Reader HTTP ${response.status}`);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  const html = await response.text();
+  return productsFromHtmlAnchors(html, endpoint.href);
+}
 
-  const markdown = await response.text();
-  if (!markdown.trim()) return [];
+async function searchShopeeWithBingRss(keyword) {
+  const endpoint = new URL("https://www.bing.com/search");
+  endpoint.searchParams.set("q", `site:shopee.vn ${keyword}`);
+  endpoint.searchParams.set("format", "rss");
+  endpoint.searchParams.set("setlang", "vi-VN");
+  endpoint.searchParams.set("cc", "vn");
 
+  const response = await fetch(endpoint, {
+    headers: {
+      Accept: "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.5",
+      "User-Agent": "Mozilla/5.0 (compatible; ShopeePriceWatch/1.0)"
+    },
+    redirect: "follow"
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+  const xml = await response.text();
   const products = [];
   const seen = new Set();
-  const markdownLink = /\[([^\]]{1,500})\]\((https?:\/\/[^)\s]+)\)/g;
+  const itemRegex = /<item\b[^>]*>([\s\S]*?)<\/item>/gi;
   let match;
 
-  while ((match = markdownLink.exec(markdown)) !== null) {
-    const resultUrl = normalizeShopeeResultUrl(decodeMarkupUrl(match[2]));
-    if (!resultUrl) continue;
-    const ids = parseShopeeIds(resultUrl);
-    if (!ids) continue;
-
-    addUniqueProduct(products, seen, {
-      shopId: ids.shopId,
-      itemId: ids.itemId,
-      name: cleanSearchTitle(match[1]) || nameFromShopeeUrl(resultUrl) || `Shopee ${ids.shopId}.${ids.itemId}`,
-      imageUrl: null,
-      priceMin: null,
-      priceMax: null,
-      discount: null,
-      rating: null,
-      sold: null,
-      shopLocation: "Kết quả web từ Shopee Việt Nam",
-      url: `https://shopee.vn/product/${ids.shopId}/${ids.itemId}`,
-      sourceUrl: resultUrl.href
-    });
-    if (products.length >= 18) return products;
-  }
-
-  const rawUrlRegex = /https?:\/\/(?:www\.)?shopee\.vn\/[A-Za-z0-9%._~:/?#\[\]@!$&'()*+,;=\-]+/gi;
-  while ((match = rawUrlRegex.exec(markdown)) !== null) {
-    const resultUrl = normalizeShopeeResultUrl(decodeMarkupUrl(match[0]));
-    if (!resultUrl) continue;
-    const ids = parseShopeeIds(resultUrl);
-    if (!ids) continue;
-
-    addUniqueProduct(products, seen, {
-      shopId: ids.shopId,
-      itemId: ids.itemId,
-      name: nameFromShopeeUrl(resultUrl) || `Shopee ${ids.shopId}.${ids.itemId}`,
-      imageUrl: null,
-      priceMin: null,
-      priceMax: null,
-      discount: null,
-      rating: null,
-      sold: null,
-      shopLocation: "Kết quả web từ Shopee Việt Nam",
-      url: `https://shopee.vn/product/${ids.shopId}/${ids.itemId}`,
-      sourceUrl: resultUrl.href
-    });
+  while ((match = itemRegex.exec(xml)) !== null) {
+    const item = match[1];
+    const link = decodeHtml(extractXmlTag(item, "link"));
+    const title = cleanText(decodeHtml(extractXmlTag(item, "title")));
+    const description = cleanText(decodeHtml(extractXmlTag(item, "description")));
+    const product = productFromUrl(normalizeShopeeResultUrl(link), title, description);
+    if (product) addUniqueProduct(products, seen, product);
     if (products.length >= 18) break;
   }
-
   return products;
 }
 
@@ -263,7 +243,7 @@ async function searchShopeeWithBrowser(env, keyword) {
 
   const response = await env.BROWSER.quickAction("json", {
     url: target.href,
-    prompt: "Extract up to 18 organic web search results that point to an individual product page on shopee.vn. Return the exact result title and the real destination Shopee URL, not a Bing redirect URL. Ignore shop homepages, category/list pages, ads, login pages and non-Shopee results. Never invent a URL.",
+    prompt: "Extract up to 18 organic web search results that point to an individual product page on shopee.vn. Return the exact result title and the real destination Shopee URL. Ignore shop homepages, category pages, ads, login pages and non-Shopee results. Never invent a URL.",
     response_format: {
       type: "json_schema",
       json_schema: {
@@ -273,10 +253,7 @@ async function searchShopeeWithBrowser(env, keyword) {
             type: "array",
             items: {
               type: "object",
-              properties: {
-                name: { type: "string" },
-                link: { type: "string" }
-              },
+              properties: { name: { type: "string" }, link: { type: "string" } },
               required: ["name", "link"]
             }
           }
@@ -288,44 +265,56 @@ async function searchShopeeWithBrowser(env, keyword) {
     rejectResourceTypes: ["media", "font"]
   });
 
-  if (!response.ok) throw new Error(`Browser Run web search HTTP ${response.status}`);
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const payload = await response.json().catch(() => null);
   const rows = Array.isArray(payload?.result?.products) ? payload.result.products : [];
-  const seen = new Set();
   const products = [];
+  const seen = new Set();
 
   for (const row of rows) {
-    const resultUrl = normalizeShopeeResultUrl(row?.link);
-    if (!resultUrl) continue;
-    const ids = parseShopeeIds(resultUrl);
-    if (!ids) continue;
-
-    addUniqueProduct(products, seen, {
-      shopId: ids.shopId,
-      itemId: ids.itemId,
-      name: cleanText(row?.name) || nameFromShopeeUrl(resultUrl) || `Shopee ${ids.shopId}.${ids.itemId}`,
-      imageUrl: null,
-      priceMin: null,
-      priceMax: null,
-      discount: null,
-      rating: null,
-      sold: null,
-      shopLocation: "Kết quả web từ Shopee Việt Nam",
-      url: `https://shopee.vn/product/${ids.shopId}/${ids.itemId}`,
-      sourceUrl: resultUrl.href
-    });
+    const product = productFromUrl(normalizeShopeeResultUrl(row?.link), cleanText(row?.name), "Kết quả web từ Shopee Việt Nam");
+    if (product) addUniqueProduct(products, seen, product);
     if (products.length >= 18) break;
   }
-
   return products;
 }
 
-function addUniqueProduct(products, seen, product) {
-  const key = `${product.shopId}:${product.itemId}`;
-  if (seen.has(key)) return false;
-  seen.add(key);
-  products.push(product);
-  return true;
+function productsFromHtmlAnchors(html, baseUrl) {
+  const products = [];
+  const seen = new Set();
+  const anchorRegex = /<a\b([^>]*?)href\s*=\s*(["'])([\s\S]*?)\2([^>]*)>([\s\S]*?)<\/a>/gi;
+  let match;
+
+  while ((match = anchorRegex.exec(html)) !== null) {
+    const href = decodeHtml(match[3]);
+    const title = cleanText(decodeHtml(match[5]));
+    const resultUrl = normalizeSearchResultUrl(href, baseUrl);
+    const product = productFromUrl(resultUrl, title, "Kết quả web từ Shopee Việt Nam");
+    if (product) addUniqueProduct(products, seen, product);
+    if (products.length >= 18) break;
+  }
+  return products;
+}
+
+function normalizeSearchResultUrl(value, baseUrl) {
+  if (!value) return null;
+  try {
+    const url = new URL(value, baseUrl);
+    const direct = normalizeShopeeResultUrl(url.href);
+    if (direct) return direct;
+
+    for (const key of ["uddg", "rut", "url", "u", "target", "r"]) {
+      const nested = url.searchParams.get(key);
+      if (!nested) continue;
+      const candidates = [nested];
+      try { candidates.push(decodeURIComponent(nested)); } catch {}
+      for (const candidate of candidates) {
+        const normalized = normalizeShopeeResultUrl(candidate);
+        if (normalized) return normalized;
+      }
+    }
+  } catch {}
+  return null;
 }
 
 function normalizeShopeeResultUrl(value) {
@@ -335,7 +324,7 @@ function normalizeShopeeResultUrl(value) {
     const host = url.hostname.toLowerCase();
     if (host === "shopee.vn" || host.endsWith(".shopee.vn")) return url;
 
-    for (const key of ["url", "u", "target", "r"]) {
+    for (const key of ["url", "u", "target", "r", "uddg"]) {
       const nested = url.searchParams.get(key);
       if (!nested) continue;
       try {
@@ -348,29 +337,32 @@ function normalizeShopeeResultUrl(value) {
   return null;
 }
 
-function parseBraveShopeeResult(row) {
-  if (!row || typeof row !== "object") return null;
-  const resultUrl = normalizeShopeeResultUrl(row.url);
+function productFromUrl(resultUrl, name = "", description = "", imageUrl = null) {
   if (!resultUrl) return null;
   const ids = parseShopeeIds(resultUrl);
   if (!ids) return null;
-
-  const title = cleanText(row.title) || `Shopee ${ids.shopId}.${ids.itemId}`;
-  const description = cleanText(row.description);
   return {
     shopId: ids.shopId,
     itemId: ids.itemId,
-    name: stripShopeeSuffix(title),
-    imageUrl: firstUrl(row?.thumbnail?.src, row?.thumbnail?.original, row?.profile?.img, row?.meta_url?.favicon),
+    name: stripShopeeSuffix(name) || nameFromShopeeUrl(resultUrl) || `Shopee ${ids.shopId}.${ids.itemId}`,
+    imageUrl: imageUrl || null,
     priceMin: null,
     priceMax: null,
     discount: null,
     rating: null,
     sold: null,
-    shopLocation: description ? truncate(description, 110) : "Kết quả từ Shopee Việt Nam",
+    shopLocation: description ? truncate(description, 110) : "Shopee Việt Nam",
     url: `https://shopee.vn/product/${ids.shopId}/${ids.itemId}`,
     sourceUrl: resultUrl.href
   };
+}
+
+function addUniqueProduct(products, seen, product) {
+  const key = `${product.shopId}:${product.itemId}`;
+  if (seen.has(key)) return false;
+  seen.add(key);
+  products.push(product);
+  return true;
 }
 
 function parseShopeeIds(url) {
@@ -388,18 +380,21 @@ function parseShopeeIds(url) {
   return shopId && itemId ? { shopId, itemId } : null;
 }
 
-function decodeMarkupUrl(value) {
-  return String(value || "")
-    .replace(/&amp;/gi, "&")
-    .replace(/\\([()])/g, "$1")
-    .replace(/[.,;]+$/, "");
+function extractXmlTag(xml, tag) {
+  const match = String(xml || "").match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
+  if (!match) return "";
+  return match[1].replace(/^<!\[CDATA\[|\]\]>$/g, "");
 }
 
-function cleanSearchTitle(value) {
-  return cleanText(value)
-    .replace(/^Image\s*\d*\s*:?\s*/i, "")
-    .replace(/^\d+\.\s*/, "")
-    .trim();
+function decodeHtml(value) {
+  return String(value || "")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(Number(dec)));
 }
 
 function nameFromShopeeUrl(url) {
@@ -415,15 +410,12 @@ function nameFromShopeeUrl(url) {
 function cleanText(value) {
   return String(value || "")
     .replace(/<[^>]*>/g, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'")
     .replace(/\s+/g, " ")
     .trim();
 }
 
 function stripShopeeSuffix(value) {
-  return value
+  return String(value || "")
     .replace(/\s*[-|]\s*Shopee(?:\s+Việt Nam)?\s*$/i, "")
     .replace(/\s*\|\s*Shopee\s*$/i, "")
     .trim();
@@ -437,9 +429,7 @@ function truncate(value, max) {
 function firstUrl(...values) {
   for (const value of values) {
     if (!value) continue;
-    try {
-      return new URL(String(value)).href;
-    } catch {}
+    try { return new URL(String(value)).href; } catch {}
   }
   return null;
 }
