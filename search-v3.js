@@ -41,7 +41,7 @@
 
     addButton.disabled = true;
     addButton.textContent = "Đang tìm…";
-    formMessage.textContent = "Đang tìm sản phẩm trên Shopee…";
+    formMessage.textContent = "Đang tìm các trang sản phẩm Shopee…";
     formMessage.classList.remove("error");
     heading.textContent = `“${query}”`;
     status.textContent = "Đang tải kết quả…";
@@ -52,10 +52,12 @@
       const result = await gateway(`/api/search?q=${encodeURIComponent(query)}`);
       const products = Array.isArray(result.products) ? result.products : [];
       status.textContent = products.length
-        ? `${products.length} kết quả gần nhất. Chọn đúng sản phẩm em muốn theo dõi.`
-        : "Không tìm thấy sản phẩm phù hợp.";
+        ? `${products.length} kết quả Shopee. Chọn đúng sản phẩm em muốn theo dõi.`
+        : "Không tìm thấy trang sản phẩm Shopee phù hợp. Thử rút gọn tên sản phẩm một chút.";
       renderResults(list, products, modal);
-      formMessage.textContent = products.length ? "Chọn một sản phẩm trong danh sách kết quả." : "Không tìm thấy sản phẩm phù hợp.";
+      formMessage.textContent = products.length
+        ? "Chọn một sản phẩm trong danh sách kết quả."
+        : "Không tìm thấy sản phẩm phù hợp. Thử tên ngắn hơn.";
     } catch (error) {
       status.textContent = error.message;
       formMessage.textContent = error.message;
@@ -114,7 +116,7 @@
       track.textContent = "Theo dõi";
       track.addEventListener("click", async () => {
         track.disabled = true;
-        track.textContent = "Đang thêm…";
+        track.textContent = "Đang lấy giá…";
         try {
           await gateway("/api/products", {
             method: "POST",
@@ -158,7 +160,7 @@
 
     const head = document.createElement("div");
     head.className = "search-head";
-    head.innerHTML = '<div><p class="section-label">TÌM TRÊN SHOPEE</p><h2>Kết quả</h2><strong class="search-query-title"></strong></div>';
+    head.innerHTML = '<div><p class="section-label">TÌM SẢN PHẨM</p><h2>Kết quả Shopee</h2><strong class="search-query-title"></strong></div>';
 
     const close = document.createElement("button");
     close.className = "icon-button";
@@ -193,7 +195,7 @@
   }
 
   function priceLabel(min, max) {
-    if (!Number.isFinite(Number(min)) || Number(min) <= 0) return "Giá chưa xác định";
+    if (!Number.isFinite(Number(min)) || Number(min) <= 0) return "Giá sẽ lấy khi theo dõi";
     if (Number(max) > Number(min)) return `${money(min)} – ${money(max)}`;
     return money(min);
   }

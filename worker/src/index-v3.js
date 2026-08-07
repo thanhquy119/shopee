@@ -1,6 +1,7 @@
 import baseHandler from "./index-v2.js";
 
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" };
+const BRAVE_SEARCH_ENDPOINT = "https://api.search.brave.com/res/v1/web/search";
 
 export default {
   async fetch(request, env, ctx) {
@@ -12,12 +13,12 @@ export default {
       }
 
       try {
-        return await searchShopee(request, env, url);
+        return await searchShopeeWithBrave(env, url);
       } catch (error) {
         console.error("search error", error);
         return json({
           error: readableError(error),
-          code: "SHOPEE_SEARCH_FAILED"
+          code: "PRODUCT_SEARCH_FAILED"
         }, 502);
       }
     }
@@ -30,122 +31,163 @@ export default {
   }
 };
 
-async function searchShopee(request, env, url) {
+async function searchShopeeWithBrave(env, url) {
   const query = String(url.searchParams.get("q") || "").trim();
   if (query.length < 2) {
     return json({ error: "Nhập ít nhất 2 ký tự để tìm sản phẩm." }, 400);
   }
 
-  const keyword = query.slice(0, 120);
-  const globalSearchSession = `gs-${crypto.randomUUID()}`;
-  const searchSession = `ss-${crypto.randomUUID()}`;
-  const viewSession = crypto.randomUUID();
-  const extraParams = JSON.stringify({
-    global_search_session_id: globalSearchSession,
-    search_session_id: searchSession
+  const apiKey = String(env.BRAVE_SEARCH_API_KEY || env.BRAVE_API_KEY || "").trim();
+  if (!apiKey) {
+    return json({
+      error: "Hệ thống chưa có BRAVE_SEARCH_API_KEY trên Cloudflare Worker.",
+      code: "BRAVE_KEY_MISSING"
+    }, 503);
+  }
+
+  const keyword = query.slice(0, 180);
+  const endpoint = new URL(BRAVE_SEARCH_ENDPOINT);
+  endpoint.searchParams.set("q", `site:shopee.vn ${keyword}`);
+  endpoint.searchParams.set("country", "VN");
+  endpoint.searchParams.set("search_lang", "vi");
+  endpoint.searchParams.set("ui_lang", "vi-VN");
+  endpoint.searchParams.set("count", "20");
+  endpoint.searchParams.set("safesearch", "moderate");
+  endpoint.searchParams.set("spellcheck", "true");
+  endpoint.searchParams.set("text_decorations", "false");
+  endpoint.searchParams.set("result_filter", "web");
+
+  const response = await fetch(endpoint, {
+    method: "GET",
+    headers: {
+      "Accept": "application/json",
+      "X-Subscription-Token": apiKey
+    },
+    redirect: "follow"
   });
 
-  const endpoint = new URL("https://shopee.vn/api/v4/search/search_items");
-  endpoint.searchParams.set("by", "relevancy");
-  endpoint.searchParams.set("keyword", keyword);
-  endpoint.searchParams.set("limit", "18");
-  endpoint.searchParams.set("newest", "0");
-  endpoint.searchParams.set("order", "desc");
-  endpoint.searchParams.set("page_type", "search");
-  endpoint.searchParams.set("scenario", "PAGE_GLOBAL_SEARCH");
-  endpoint.searchParams.set("source", "SRP");
-  endpoint.searchParams.set("version", "2");
-  endpoint.searchParams.set("extra_params", extraParams);
-  endpoint.searchParams.set("view_session_id", viewSession);
-
-  const referer = `https://shopee.vn/search?keyword=${encodeURIComponent(keyword)}`;
-  const headers = {
-    "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.7,en;q=0.6",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36",
-    "Referer": referer,
-    "x-api-source": "pc",
-    "x-shopee-language": "vi",
-    "af-ac-enc-dat": "1"
-  };
-  if (env.SHOPEE_COOKIE) headers.Cookie = env.SHOPEE_COOKIE;
-
-  const response = await fetch(endpoint, { headers, redirect: "follow" });
   if (!response.ok) {
-    throw new Error(`Shopee từ chối tìm kiếm (HTTP ${response.status}).`);
+    const body = await response.text().catch(() => "");
+    const detail = body ? `: ${body.slice(0, 220)}` : "";
+    throw new Error(`Brave Search từ chối yêu cầu (HTTP ${response.status})${detail}`);
   }
 
   const payload = await response.json().catch(() => null);
-  if (!payload) throw new Error("Shopee không trả về dữ liệu tìm kiếm hợp lệ.");
-  if (payload.error || payload.error_msg) {
-    throw new Error(payload.error_msg || `Shopee error ${payload.error}`);
-  }
+  if (!payload) throw new Error("Brave Search không trả về dữ liệu hợp lệ.");
 
-  const rows = payload.items || payload.data?.items || [];
-  if (!Array.isArray(rows)) {
-    throw new Error("Định dạng kết quả tìm kiếm của Shopee đã thay đổi.");
-  }
+  const rows = Array.isArray(payload?.web?.results) ? payload.web.results : [];
+  const seen = new Set();
+  const products = [];
 
-  const products = rows
-    .map(parseSearchItem)
-    .filter(Boolean)
-    .slice(0, 18);
+  for (const row of rows) {
+    const product = parseBraveShopeeResult(row);
+    if (!product) continue;
+    const key = `${product.shopId}:${product.itemId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    products.push(product);
+    if (products.length >= 18) break;
+  }
 
   return json({
     query: keyword,
     products,
-    count: products.length
+    count: products.length,
+    source: "brave"
   });
 }
 
-function parseSearchItem(row) {
-  const item = row?.item_basic || row?.item || row;
-  if (!item || typeof item !== "object") return null;
+function parseBraveShopeeResult(row) {
+  if (!row || typeof row !== "object") return null;
 
-  const shopId = item.shopid ?? item.shop_id ?? row?.shopid ?? row?.shop_id;
-  const itemId = item.itemid ?? item.item_id ?? row?.itemid ?? row?.item_id;
-  if (!shopId || !itemId) return null;
+  let resultUrl;
+  try {
+    resultUrl = new URL(String(row.url || ""));
+  } catch {
+    return null;
+  }
 
-  const rawMin = firstNumber(item.price_min, item.price, row?.price_min, row?.price);
-  const rawMax = firstNumber(item.price_max, item.price, row?.price_max, row?.price);
-  const priceMin = normalizeShopeePrice(rawMin);
-  const priceMax = normalizeShopeePrice(rawMax);
+  const host = resultUrl.hostname.toLowerCase();
+  if (!(host === "shopee.vn" || host.endsWith(".shopee.vn"))) return null;
 
-  const imageValue = item.image || item.image_hash || item.images?.[0] || row?.image;
-  const imageUrl = imageValue
-    ? (String(imageValue).startsWith("http")
-      ? String(imageValue)
-      : `https://down-vn.img.susercontent.com/file/${imageValue}`)
-    : null;
+  const ids = parseShopeeIds(resultUrl);
+  if (!ids) return null;
 
-  const name = String(item.name || item.title || row?.name || `Shopee ${shopId}.${itemId}`);
+  const canonicalUrl = `https://shopee.vn/product/${ids.shopId}/${ids.itemId}`;
+  const title = cleanText(row.title) || `Shopee ${ids.shopId}.${ids.itemId}`;
+  const description = cleanText(row.description);
+  const imageUrl = firstUrl(
+    row?.thumbnail?.src,
+    row?.thumbnail?.original,
+    row?.profile?.img,
+    row?.meta_url?.favicon
+  );
 
   return {
-    shopId: String(shopId),
-    itemId: String(itemId),
-    name,
+    shopId: ids.shopId,
+    itemId: ids.itemId,
+    name: stripShopeeSuffix(title),
     imageUrl,
-    priceMin,
-    priceMax,
-    discount: item.discount || row?.discount || null,
-    rating: Number(item.item_rating?.rating_star || item.rating_star || 0) || null,
-    sold: Number(item.historical_sold || item.sold || 0) || null,
-    shopLocation: item.shop_location || item.shop_location_name || null,
-    url: `https://shopee.vn/product/${shopId}/${itemId}`
+    priceMin: null,
+    priceMax: null,
+    discount: null,
+    rating: null,
+    sold: null,
+    shopLocation: description ? truncate(description, 110) : "Kết quả từ Shopee Việt Nam",
+    url: canonicalUrl,
+    sourceUrl: resultUrl.href
   };
 }
 
-function firstNumber(...values) {
-  for (const value of values) {
-    const number = Number(value);
-    if (Number.isFinite(number) && number > 0) return number;
-  }
+function parseShopeeIds(url) {
+  const path = decodeURIComponent(url.pathname || "");
+
+  const iPattern = path.match(/i\.(\d+)\.(\d+)/i);
+  if (iPattern) return { shopId: iPattern[1], itemId: iPattern[2] };
+
+  const productPattern = path.match(/\/product\/(\d+)\/(\d+)/i);
+  if (productPattern) return { shopId: productPattern[1], itemId: productPattern[2] };
+
+  const dottedTail = path.match(/(?:^|\/)(\d+)\.(\d+)(?:\/?$)/);
+  if (dottedTail) return { shopId: dottedTail[1], itemId: dottedTail[2] };
+
+  const shopId = url.searchParams.get("shopid") || url.searchParams.get("shop_id");
+  const itemId = url.searchParams.get("itemid") || url.searchParams.get("item_id");
+  if (shopId && itemId) return { shopId, itemId };
+
   return null;
 }
 
-function normalizeShopeePrice(raw) {
-  if (!Number.isFinite(Number(raw)) || Number(raw) <= 0) return null;
-  return Math.round(Number(raw) / 100000);
+function cleanText(value) {
+  return String(value || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function stripShopeeSuffix(value) {
+  return value
+    .replace(/\s*[-|]\s*Shopee(?:\s+Việt Nam)?\s*$/i, "")
+    .replace(/\s*\|\s*Shopee\s*$/i, "")
+    .trim();
+}
+
+function truncate(value, max) {
+  const text = String(value || "");
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+}
+
+function firstUrl(...values) {
+  for (const value of values) {
+    if (!value) continue;
+    try {
+      return new URL(String(value)).href;
+    } catch {}
+  }
+  return null;
 }
 
 function json(data, status = 200) {
