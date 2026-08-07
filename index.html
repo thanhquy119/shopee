@@ -14,7 +14,7 @@
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" type="image/svg+xml" href="/icon.svg" />
   <link rel="apple-touch-icon" href="/icon.svg" />
-  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/styles-v2.css" />
   <title>S. — Shopee Price Watch</title>
 </head>
 <body>
@@ -23,7 +23,10 @@
       <a class="brand" href="/" aria-label="Trang chủ">S.</a>
       <div class="top-actions">
         <button id="installButton" class="text-button" hidden>Cài PWA</button>
-        <button id="settingsButton" class="pill-button" type="button">Cài đặt</button>
+        <button id="bellButton" class="bell-button" type="button" aria-label="Thông báo">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>
+          <span id="bellBadge" class="bell-badge" hidden>0</span>
+        </button>
       </div>
     </header>
 
@@ -31,7 +34,7 @@
       <section class="hero">
         <p class="eyebrow">SHOPEE PRICE WATCH</p>
         <h1>Theo dõi giá.<br />Không cần canh.</h1>
-        <p class="hero-copy">Dán link sản phẩm. Hệ thống kiểm tra mỗi giờ và báo khi giá thấp hơn lúc em bắt đầu theo dõi.</p>
+        <p class="hero-copy">Dán link sản phẩm. Hệ thống kiểm tra mỗi giờ và báo khi giá thấp hơn lúc bắt đầu theo dõi.</p>
         <form id="addProductForm" class="track-box">
           <span class="track-glyph" aria-hidden="true">↘</span>
           <label class="sr-only" for="productUrl">Link sản phẩm Shopee</label>
@@ -51,7 +54,6 @@
           <article class="stat-card"><span>Đang giảm</span><strong id="discountedProducts">—</strong></article>
           <article class="stat-card"><span>Cập nhật gần nhất</span><strong id="lastUpdated">—</strong></article>
         </div>
-        <div id="setupNotice" class="notice" hidden><strong>Chưa kết nối Worker.</strong><p>Mở “Cài đặt”, nhập URL Cloudflare Worker và API key để bắt đầu.</p></div>
         <div id="loadingState" class="loading-state" hidden><span class="loading-dot"></span><div><strong>Đang đồng bộ</strong><p>Đọc danh sách và giá mới nhất…</p></div></div>
         <div id="emptyState" class="empty-state" hidden><span class="empty-mark">S.</span><h3>Chưa có sản phẩm.</h3><p>Dán một link Shopee ở phía trên để bắt đầu.</p></div>
         <div id="productList" class="product-list"></div>
@@ -61,22 +63,20 @@
     <footer><span>S. / SHOPEE PRICE WATCH</span><span>CHECK / 01 HOUR</span></footer>
   </div>
 
-  <dialog id="settingsDialog" class="settings-dialog">
-    <form method="dialog" class="settings-card" id="settingsForm">
-      <div class="settings-head">
-        <div><p class="section-label">CÀI ĐẶT</p><h2>Kết nối hệ thống</h2></div>
-        <button class="icon-button" value="cancel" aria-label="Đóng" type="submit">×</button>
+  <dialog id="notificationDialog" class="notification-dialog">
+    <section class="notification-card">
+      <div class="notification-head">
+        <div><p class="section-label">THÔNG BÁO</p><h2>Lịch sử</h2></div>
+        <form method="dialog"><button class="icon-button" aria-label="Đóng" type="submit">×</button></form>
       </div>
-      <label><span>Cloudflare Worker URL</span><input id="apiUrlInput" type="url" placeholder="https://shopee-price-watcher.xxx.workers.dev" /></label>
-      <label><span>API key</span><input id="apiTokenInput" type="password" autocomplete="off" placeholder="Nhập APP_TOKEN của Worker" /></label>
-      <p class="settings-note">API key chỉ được lưu trong trình duyệt trên thiết bị này, không ghi vào GitHub hay gửi sang Vercel.</p>
-      <div class="settings-actions">
-        <button id="saveSettingsButton" class="pill-button" type="button">Lưu kết nối</button>
-        <button id="notificationButton" class="outline-button" type="button">Bật thông báo</button>
+      <div class="notification-toolbar">
+        <button id="notificationButton" class="pill-button" type="button">Bật thông báo trên thiết bị này</button>
         <button id="testNotificationButton" class="outline-button" type="button">Gửi thử</button>
+        <p id="notificationMessage" class="form-message" role="status"></p>
       </div>
-      <p id="settingsMessage" class="form-message"></p>
-    </form>
+      <div id="notificationEmpty" class="notification-empty" hidden><strong>Chưa có thông báo.</strong><span>Khi một sản phẩm xuống giá thấp mới, thông báo sẽ xuất hiện ở đây.</span></div>
+      <div id="notificationList" class="notification-list"></div>
+    </section>
   </dialog>
 
   <template id="productTemplate">
@@ -101,7 +101,6 @@
     </article>
   </template>
 
-  <script src="/config.js"></script>
-  <script src="/app.js" defer></script>
+  <script src="/app-v2.js" defer></script>
 </body>
 </html>
