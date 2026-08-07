@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#ffffff" />
-  <meta name="description" content="PWA theo dõi giá sản phẩm Shopee theo giờ." />
+  <meta name="description" content="PWA theo dõi giá sản phẩm Shopee mỗi ngày." />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Shopee Watch" />
@@ -35,7 +35,7 @@
       <section class="hero">
         <p class="eyebrow">SHOPEE PRICE WATCH</p>
         <h1>Theo dõi giá.<br />Không cần canh.</h1>
-        <p class="hero-copy">Nhập tên sản phẩm để tìm trên Shopee, hoặc dán link nếu em đã có. Chọn đúng sản phẩm rồi hệ thống sẽ kiểm tra giá mỗi giờ.</p>
+        <p class="hero-copy">Nhập tên sản phẩm để tìm trên Shopee, hoặc dán link nếu em đã có. Chọn đúng sản phẩm rồi hệ thống sẽ kiểm tra giá mỗi ngày.</p>
         <form id="addProductForm" class="track-box">
           <span class="track-glyph" aria-hidden="true">⌕</span>
           <label class="sr-only" for="productUrl">Tên sản phẩm hoặc link Shopee</label>
@@ -61,7 +61,7 @@
       </section>
     </main>
 
-    <footer><span>S. / SHOPEE PRICE WATCH</span><span>CHECK / 01 HOUR</span></footer>
+    <footer><span>S. / SHOPEE PRICE WATCH</span><span>CHECK / 01 DAY</span></footer>
   </div>
 
   <dialog id="notificationDialog" class="notification-dialog">
@@ -104,5 +104,6 @@
 
   <script src="/app-v2.js" defer></script>
   <script src="/search-v3.js" defer></script>
+  <script src="/track-daily.js" defer></script>
 </body>
 </html>
