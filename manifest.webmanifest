@@ -1,0 +1,19 @@
+{
+  "name": "S. — Shopee Price Watch",
+  "short_name": "S.",
+  "description": "Theo dõi giá sản phẩm Shopee theo giờ và nhận thông báo khi giá giảm.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "lang": "vi",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

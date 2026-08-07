@@ -1,0 +1,6 @@
+APP_TOKEN=replace-me
+VAPID_PUBLIC_KEY=replace-me
+VAPID_PRIVATE_KEY=replace-me
+VAPID_SUBJECT=mailto:you@example.com
+# Optional: only use your own Shopee session cookie if public requests start being blocked.
+# SHOPEE_COOKIE=
