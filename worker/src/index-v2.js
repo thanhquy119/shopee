@@ -131,7 +131,13 @@ async function createProduct(request, env) {
     return corsJson(request, env, { error: "Thiếu link sản phẩm Shopee." }, 400);
   }
 
-  const product = await fetchShopeeProduct(rawUrl, env);
+  let product;
+  try {
+    product = await fetchShopeeProduct(rawUrl, env);
+  } catch (error) {
+    return corsJson(request, env, { error: readableError(error) }, 422);
+  }
+
   const id = `${product.shopId}:${product.itemId}`;
   const now = new Date().toISOString();
   const existing = await env.DB.prepare("SELECT id, active FROM products WHERE id = ?")
@@ -468,25 +474,42 @@ function normalizeUrl(value) {
   } catch {
     throw new Error("Link không hợp lệ.");
   }
+
   const host = url.hostname.toLowerCase();
-  if (!host.endsWith("shopee.vn")) {
-    throw new Error("Hiện bản này chỉ nhận link Shopee Việt Nam.");
+  const isShopeeVn = host === "shopee.vn" || host.endsWith(".shopee.vn");
+  const isShopeeShort = host === "vn.shp.ee";
+  if (!isShopeeVn && !isShopeeShort) {
+    throw new Error("Hiện bản này chỉ nhận link Shopee Việt Nam hoặc link rút gọn vn.shp.ee.");
   }
   return url.href;
 }
 
 async function resolveShopeeUrl(url) {
   const parsed = new URL(url);
-  if (parsed.hostname !== "s.shopee.vn") return url;
+  const host = parsed.hostname.toLowerCase();
+  const isShort = host === "s.shopee.vn" || host === "vn.shp.ee";
+  if (!isShort) return url;
 
   const response = await fetch(url, {
     method: "GET",
     headers: {
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.7,en;q=0.6",
       "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 Version/18.5 Mobile/15E148 Safari/604.1"
     },
     redirect: "follow"
   });
-  return response.url || url;
+
+  if (!response.ok) {
+    throw new Error(`Không mở được link rút gọn Shopee (HTTP ${response.status}).`);
+  }
+
+  const resolved = response.url || url;
+  const finalHost = new URL(resolved).hostname.toLowerCase();
+  if (!(finalHost === "shopee.vn" || finalHost.endsWith(".shopee.vn"))) {
+    throw new Error("Link rút gọn không chuyển đến trang sản phẩm Shopee Việt Nam.");
+  }
+  return resolved;
 }
 
 function parseShopeeIds(url) {
