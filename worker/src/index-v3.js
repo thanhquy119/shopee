@@ -115,9 +115,9 @@ async function searchShopee(env, url) {
     try {
       const products = await searchShopeeWithBrowser(env, keyword);
       if (products.length) {
-        return json({ query: keyword, products, count: products.length, source: "browser-ai", fallbackUrl, warnings });
+        return json({ query: keyword, products, count: products.length, source: "browser-web", fallbackUrl, warnings });
       }
-      warnings.push("Browser Run mở được trang tìm kiếm nhưng chưa trích được sản phẩm.");
+      warnings.push("Browser Run chưa tìm được URL sản phẩm Shopee từ kết quả web.");
     } catch (error) {
       warnings.push(`Browser: ${truncate(readableError(error), 180)}`);
       console.warn(JSON.stringify({ event: "browser_search_failed", error: readableError(error) }));
@@ -173,10 +173,14 @@ async function searchShopeeWithBrave(apiKey, keyword) {
 }
 
 async function searchShopeeWithBrowser(env, keyword) {
-  const targetUrl = `https://shopee.vn/search?keyword=${encodeURIComponent(keyword)}`;
+  const target = new URL("https://www.bing.com/search");
+  target.searchParams.set("q", `site:shopee.vn ${keyword}`);
+  target.searchParams.set("setlang", "vi-VN");
+  target.searchParams.set("cc", "vn");
+
   const response = await env.BROWSER.quickAction("json", {
-    url: targetUrl,
-    prompt: "Extract up to 18 product listings visible on this Shopee Vietnam search page. For each product return its exact displayed name and the actual product link from the page. Do not invent links or IDs. Ignore navigation, category, shop, login and advertisement links.",
+    url: target.href,
+    prompt: "Extract up to 18 organic web search results that point to an individual product page on shopee.vn. Return the exact result title and the real destination Shopee URL, not a Bing redirect URL. Ignore shop homepages, category/list pages, ads, login pages and non-Shopee results. Never invent a URL.",
     response_format: {
       type: "json_schema",
       json_schema: {
@@ -201,20 +205,15 @@ async function searchShopeeWithBrowser(env, keyword) {
     rejectResourceTypes: ["media", "font"]
   });
 
-  if (!response.ok) throw new Error(`Browser Run JSON HTTP ${response.status}`);
+  if (!response.ok) throw new Error(`Browser Run web search HTTP ${response.status}`);
   const payload = await response.json().catch(() => null);
   const rows = Array.isArray(payload?.result?.products) ? payload.result.products : [];
   const seen = new Set();
   const products = [];
 
   for (const row of rows) {
-    let resultUrl;
-    try {
-      resultUrl = new URL(String(row?.link || ""), "https://shopee.vn/");
-    } catch {
-      continue;
-    }
-
+    const resultUrl = normalizeShopeeResultUrl(row?.link);
+    if (!resultUrl) continue;
     const ids = parseShopeeIds(resultUrl);
     if (!ids) continue;
     const key = `${ids.shopId}:${ids.itemId}`;
@@ -231,7 +230,7 @@ async function searchShopeeWithBrowser(env, keyword) {
       discount: null,
       rating: null,
       sold: null,
-      shopLocation: "Tìm trực tiếp trên Shopee bằng Browser Run",
+      shopLocation: "Kết quả web từ Shopee Việt Nam",
       url: `https://shopee.vn/product/${ids.shopId}/${ids.itemId}`,
       sourceUrl: resultUrl.href
     });
@@ -241,17 +240,30 @@ async function searchShopeeWithBrowser(env, keyword) {
   return products;
 }
 
+function normalizeShopeeResultUrl(value) {
+  if (!value) return null;
+  try {
+    const url = new URL(String(value), "https://shopee.vn/");
+    const host = url.hostname.toLowerCase();
+    if (host === "shopee.vn" || host.endsWith(".shopee.vn")) return url;
+
+    for (const key of ["url", "u", "target", "r"]) {
+      const nested = url.searchParams.get(key);
+      if (!nested) continue;
+      try {
+        const decoded = new URL(decodeURIComponent(nested));
+        const nestedHost = decoded.hostname.toLowerCase();
+        if (nestedHost === "shopee.vn" || nestedHost.endsWith(".shopee.vn")) return decoded;
+      } catch {}
+    }
+  } catch {}
+  return null;
+}
+
 function parseBraveShopeeResult(row) {
   if (!row || typeof row !== "object") return null;
-  let resultUrl;
-  try {
-    resultUrl = new URL(String(row.url || ""));
-  } catch {
-    return null;
-  }
-
-  const host = resultUrl.hostname.toLowerCase();
-  if (!(host === "shopee.vn" || host.endsWith(".shopee.vn"))) return null;
+  const resultUrl = normalizeShopeeResultUrl(row.url);
+  if (!resultUrl) return null;
   const ids = parseShopeeIds(resultUrl);
   if (!ids) return null;
 
