@@ -1,5 +1,5 @@
-const CACHE = "shopee-watch-v2";
-const APP_SHELL = ["/", "/styles.css", "/styles-v2.css", "/app-v2.js", "/manifest.webmanifest", "/icon.svg"];
+const CACHE = "shopee-watch-v3";
+const APP_SHELL = ["/", "/styles.css", "/styles-v2.css", "/search-v3.css", "/app-v2.js", "/search-v3.js", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

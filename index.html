@@ -15,6 +15,7 @@
   <link rel="icon" type="image/svg+xml" href="/icon.svg" />
   <link rel="apple-touch-icon" href="/icon.svg" />
   <link rel="stylesheet" href="/styles-v2.css" />
+  <link rel="stylesheet" href="/search-v3.css" />
   <title>S. — Shopee Price Watch</title>
 </head>
 <body>
@@ -34,12 +35,12 @@
       <section class="hero">
         <p class="eyebrow">SHOPEE PRICE WATCH</p>
         <h1>Theo dõi giá.<br />Không cần canh.</h1>
-        <p class="hero-copy">Dán link sản phẩm. Hệ thống kiểm tra mỗi giờ và báo khi giá thấp hơn lúc bắt đầu theo dõi.</p>
+        <p class="hero-copy">Nhập tên sản phẩm để tìm trên Shopee, hoặc dán link nếu em đã có. Chọn đúng sản phẩm rồi hệ thống sẽ kiểm tra giá mỗi giờ.</p>
         <form id="addProductForm" class="track-box">
-          <span class="track-glyph" aria-hidden="true">↘</span>
-          <label class="sr-only" for="productUrl">Link sản phẩm Shopee</label>
-          <input id="productUrl" name="url" type="url" inputmode="url" autocomplete="off" placeholder="https://shopee.vn/..." required />
-          <button id="addButton" type="submit">Theo dõi</button>
+          <span class="track-glyph" aria-hidden="true">⌕</span>
+          <label class="sr-only" for="productUrl">Tên sản phẩm hoặc link Shopee</label>
+          <input id="productUrl" name="url" type="text" inputmode="search" autocomplete="off" placeholder="Tên sản phẩm hoặc link Shopee…" required />
+          <button id="addButton" type="submit">Tìm</button>
         </form>
         <p id="formMessage" class="form-message" role="status"></p>
       </section>
@@ -55,7 +56,7 @@
           <article class="stat-card"><span>Cập nhật gần nhất</span><strong id="lastUpdated">—</strong></article>
         </div>
         <div id="loadingState" class="loading-state" hidden><span class="loading-dot"></span><div><strong>Đang đồng bộ</strong><p>Đọc danh sách và giá mới nhất…</p></div></div>
-        <div id="emptyState" class="empty-state" hidden><span class="empty-mark">S.</span><h3>Chưa có sản phẩm.</h3><p>Dán một link Shopee ở phía trên để bắt đầu.</p></div>
+        <div id="emptyState" class="empty-state" hidden><span class="empty-mark">S.</span><h3>Chưa có sản phẩm.</h3><p>Tìm tên sản phẩm ở phía trên để bắt đầu.</p></div>
         <div id="productList" class="product-list"></div>
       </section>
     </main>
@@ -102,5 +103,6 @@
   </template>
 
   <script src="/app-v2.js" defer></script>
+  <script src="/search-v3.js" defer></script>
 </body>
 </html>
