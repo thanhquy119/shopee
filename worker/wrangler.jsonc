@@ -3,6 +3,7 @@
   "name": "shopee-price-watcher",
   "main": "src/index-v3.js",
   "compatibility_date": "2026-08-07",
+  "keep_vars": true,
   "observability": { "enabled": true },
   "d1_databases": [
     {
