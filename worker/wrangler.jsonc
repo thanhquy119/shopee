@@ -5,9 +5,6 @@
   "compatibility_date": "2026-08-07",
   "keep_vars": true,
   "observability": { "enabled": true },
-  "secrets": {
-    "required": ["APP_TOKEN", "BRAVE_SEARCH_API_KEY"]
-  },
   "d1_databases": [
     {
       "binding": "DB",
@@ -20,6 +17,9 @@
     "crons": ["0 * * * *"]
   },
   "vars": {
-    "ALLOWED_ORIGIN": "https://shopee-theta-amber.vercel.app"
+    "ALLOWED_ORIGIN": "https://shopee-theta-amber.vercel.app",
+    "VERCEL_OIDC_ISSUER": "https://oidc.vercel.com/thanhquy1192212-gmailcoms-projects",
+    "VERCEL_OIDC_AUDIENCE": "https://vercel.com/thanhquy1192212-gmailcoms-projects",
+    "VERCEL_OIDC_SUBJECT": "owner:thanhquy1192212-gmailcoms-projects:project:shopee:environment:production"
   }
 }

@@ -1,10 +1,24 @@
 export default async function handler(req, res) {
   const workerUrl = String(process.env.SHOPEE_WORKER_URL || "").replace(/\/$/, "");
-  const appToken = String(process.env.SHOPEE_APP_TOKEN || "");
+  const appToken = String(process.env.SHOPEE_APP_TOKEN || "").trim();
+  const oidcHeader = req.headers?.["x-vercel-oidc-token"];
+  const oidcToken = Array.isArray(oidcHeader)
+    ? String(oidcHeader[0] || "").trim()
+    : String(oidcHeader || "").trim();
+  const authToken = oidcToken || appToken;
+  const authMode = oidcToken ? "oidc" : "legacy";
 
-  if (!workerUrl || !appToken) {
+  res.setHeader("X-Gateway-Auth-Mode", authMode);
+
+  if (!workerUrl) {
     return res.status(503).json({
-      error: "Hệ thống chưa được cấu hình SHOPEE_WORKER_URL/SHOPEE_APP_TOKEN trên Vercel."
+      error: "Hệ thống chưa được cấu hình SHOPEE_WORKER_URL trên Vercel."
+    });
+  }
+
+  if (!authToken) {
+    return res.status(503).json({
+      error: "Vercel chưa cung cấp OIDC token và cũng không có SHOPEE_APP_TOKEN dự phòng."
     });
   }
 
@@ -29,7 +43,7 @@ export default async function handler(req, res) {
   try {
     const target = `${workerUrl}${path}`;
     const headers = {
-      Authorization: `Bearer ${appToken}`,
+      Authorization: `Bearer ${authToken}`,
       Accept: "application/json"
     };
 

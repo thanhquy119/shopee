@@ -10,7 +10,8 @@
     "db:local": "wrangler d1 migrations apply DB --local"
   },
   "dependencies": {
-    "@block65/webcrypto-web-push": "1.0.2"
+    "@block65/webcrypto-web-push": "1.0.2",
+    "jose": "6.2.4"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"
