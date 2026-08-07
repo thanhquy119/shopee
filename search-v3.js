@@ -51,13 +51,20 @@
     try {
       const result = await gateway(`/api/search?q=${encodeURIComponent(query)}`);
       const products = Array.isArray(result.products) ? result.products : [];
-      status.textContent = products.length
-        ? `${products.length} kết quả Shopee. Chọn đúng sản phẩm em muốn theo dõi.`
-        : "Không tìm thấy trang sản phẩm Shopee phù hợp. Thử rút gọn tên sản phẩm một chút.";
-      renderResults(list, products, modal);
-      formMessage.textContent = products.length
-        ? "Chọn một sản phẩm trong danh sách kết quả."
-        : "Không tìm thấy sản phẩm phù hợp. Thử tên ngắn hơn.";
+
+      if (products.length) {
+        status.textContent = `${products.length} kết quả Shopee. Chọn đúng sản phẩm em muốn theo dõi.`;
+        renderResults(list, products, modal);
+        formMessage.textContent = "Chọn một sản phẩm trong danh sách kết quả.";
+      } else {
+        status.textContent = result.fallbackUrl
+          ? "Chưa lấy được danh sách tự động. Em có thể mở đúng trang tìm kiếm Shopee từ nút bên dưới."
+          : "Không tìm thấy trang sản phẩm Shopee phù hợp. Thử rút gọn tên sản phẩm một chút.";
+        if (result.fallbackUrl) renderFallback(list, result.fallbackUrl, query);
+        formMessage.textContent = result.fallbackUrl
+          ? "Chưa có kết quả tự động; đã chuẩn bị đường dẫn tìm trực tiếp trên Shopee."
+          : "Không tìm thấy sản phẩm phù hợp. Thử tên ngắn hơn.";
+      }
     } catch (error) {
       status.textContent = error.message;
       formMessage.textContent = error.message;
@@ -149,6 +156,43 @@
       card.append(media, main);
       list.append(card);
     }
+  }
+
+  function renderFallback(list, fallbackUrl, query) {
+    list.replaceChildren();
+
+    const card = document.createElement("article");
+    card.className = "search-result-card";
+
+    const media = document.createElement("div");
+    media.className = "search-result-media";
+    media.textContent = "↗";
+
+    const main = document.createElement("div");
+    main.className = "search-result-main";
+
+    const name = document.createElement("strong");
+    name.className = "search-result-name";
+    name.textContent = "Mở tìm kiếm trực tiếp trên Shopee";
+
+    const meta = document.createElement("div");
+    meta.className = "search-result-meta";
+    meta.textContent = `Đã điền sẵn: ${query}`;
+
+    const actions = document.createElement("div");
+    actions.className = "search-result-actions";
+
+    const open = document.createElement("a");
+    open.className = "pill-button";
+    open.href = fallbackUrl;
+    open.target = "_blank";
+    open.rel = "noreferrer";
+    open.textContent = "Mở tìm kiếm trên Shopee";
+
+    actions.append(open);
+    main.append(name, meta, actions);
+    card.append(media, main);
+    list.append(card);
   }
 
   function createSearchDialog() {
