@@ -8,9 +8,6 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Shopee Watch" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" type="image/svg+xml" href="/icon.svg" />
   <link rel="apple-touch-icon" href="/icon.svg" />
@@ -33,9 +30,7 @@
 
     <main>
       <section class="hero">
-        <p class="eyebrow">SHOPEE PRICE WATCH</p>
         <h1>Theo dõi giá.<br />Không cần canh.</h1>
-        <p class="hero-copy">Nhập tên sản phẩm để tìm trên Shopee, hoặc dán link nếu em đã có. Chọn đúng sản phẩm rồi hệ thống sẽ kiểm tra giá mỗi ngày.</p>
         <form id="addProductForm" class="track-box">
           <span class="track-glyph" aria-hidden="true">⌕</span>
           <label class="sr-only" for="productUrl">Tên sản phẩm hoặc link Shopee</label>
@@ -47,7 +42,7 @@
 
       <section class="dashboard-shell">
         <div class="section-head">
-          <div><p class="section-label">DANH SÁCH THEO DÕI</p><h2>Sản phẩm</h2></div>
+          <h2>Sản phẩm</h2>
           <button id="refreshButton" class="outline-button" type="button">Làm mới</button>
         </div>
         <div class="stats-grid" aria-label="Tổng quan">
@@ -55,19 +50,16 @@
           <article class="stat-card"><span>Đang giảm</span><strong id="discountedProducts">—</strong></article>
           <article class="stat-card"><span>Cập nhật gần nhất</span><strong id="lastUpdated">—</strong></article>
         </div>
-        <div id="loadingState" class="loading-state" hidden><span class="loading-dot"></span><div><strong>Đang đồng bộ</strong><p>Đọc danh sách và giá mới nhất…</p></div></div>
-        <div id="emptyState" class="empty-state" hidden><span class="empty-mark">S.</span><h3>Chưa có sản phẩm.</h3><p>Tìm tên sản phẩm ở phía trên để bắt đầu.</p></div>
+        <div id="emptyState" class="empty-state" hidden><span class="empty-mark">S.</span><h3>Chưa có sản phẩm.</h3></div>
         <div id="productList" class="product-list"></div>
       </section>
     </main>
-
-    <footer><span>S. / SHOPEE PRICE WATCH</span><span>CHECK / 01 DAY</span></footer>
   </div>
 
   <dialog id="notificationDialog" class="notification-dialog">
     <section class="notification-card">
       <div class="notification-head">
-        <div><p class="section-label">THÔNG BÁO</p><h2>Lịch sử</h2></div>
+        <h2>Lịch sử</h2>
         <form method="dialog"><button class="icon-button" aria-label="Đóng" type="submit">×</button></form>
       </div>
       <div class="notification-toolbar">
@@ -75,7 +67,7 @@
         <button id="testNotificationButton" class="outline-button" type="button">Gửi thử</button>
         <p id="notificationMessage" class="form-message" role="status"></p>
       </div>
-      <div id="notificationEmpty" class="notification-empty" hidden><strong>Chưa có thông báo.</strong><span>Khi một sản phẩm xuống giá thấp mới, thông báo sẽ xuất hiện ở đây.</span></div>
+      <div id="notificationEmpty" class="notification-empty" hidden><strong>Chưa có thông báo.</strong></div>
       <div id="notificationList" class="notification-list"></div>
     </section>
   </dialog>
