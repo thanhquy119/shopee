@@ -137,8 +137,10 @@ function mapApifySearchProduct(row) {
   const itemId = String(row.item_id ?? row.itemId ?? "").trim();
   if (!/^\d+$/.test(shopId) || !/^\d+$/.test(itemId)) return null;
 
-  const name = cleanText(row.name || row.title) || `Shopee ${shopId}.${itemId}`;
   const sourceUrl = normalizeShopeeUrl(row.url) || `https://shopee.vn/product/${shopId}/${itemId}`;
+  const listingName = titleFromListingUrl(sourceUrl);
+  const actorName = cleanText(row.name || row.title);
+  const name = listingName || actorName || `Shopee ${shopId}.${itemId}`;
   const price = validPrice(row.price);
   const priceMax = validPrice(row.price_max ?? row.priceMax);
   const original = validPrice(row.original_price ?? row.originalPrice);
@@ -185,7 +187,7 @@ function relevanceScore(product, query) {
 
 function searchCacheKey(query) {
   const normalized = normalizeText(query);
-  return new Request(`https://search-cache.shopee-price-watcher.invalid/v2?q=${encodeURIComponent(normalized)}`);
+  return new Request(`https://search-cache.shopee-price-watcher.invalid/v3?q=${encodeURIComponent(normalized)}`);
 }
 
 async function putSearchCache(key, payload) {
@@ -197,7 +199,7 @@ async function putSearchCache(key, payload) {
       }
     }));
   } catch (error) {
-    console.warn(JSON.stringify({ event: "search_v2_cache_put_failed", error: readableError(error) }));
+    console.warn(JSON.stringify({ event: "search_v3_cache_put_failed", error: readableError(error) }));
   }
 }
 
@@ -227,6 +229,24 @@ function normalizeShopeeUrl(value) {
     if (host === "shopee.vn" || host.endsWith(".shopee.vn")) return url.href;
   } catch {}
   return null;
+}
+
+function titleFromListingUrl(value) {
+  if (!value) return "";
+  try {
+    const parsed = new URL(String(value));
+    const path = decodeURIComponent(parsed.pathname || "");
+    const tail = path.split("/").filter(Boolean).at(-1) || "";
+    if (!tail || /^\d+$/.test(tail)) return "";
+
+    const slug = tail.replace(/-i\.\d+\.\d+.*$/i, "");
+    if (!slug || slug === tail && /^product$/i.test(slug)) return "";
+
+    const title = cleanText(slug.replace(/[-_]+/g, " "));
+    return title.length >= 4 ? title : "";
+  } catch {
+    return "";
+  }
 }
 
 function validPrice(value) {
